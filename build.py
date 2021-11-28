@@ -5,7 +5,7 @@ from os.path import join, splitext, basename
 
 posts_directory = "./posts"
 
-output_directory = "./site"
+output_directory = "./docs"
 output_posts_directory = join(output_directory, "posts")
 
 finished_posts = [
@@ -58,11 +58,12 @@ for post in reversed(finished_posts):
     with open("/tmp/BLOG_index.md", "w") as f:
         f.write(index_md)
 
+    index_html_file = join(output_directory, "index.html")
     os.system(
         f"pandoc \\"
         f"--data-dir='_pandoc' \\"
         f"--template='_pandoc/templates/post.html' \\"
         f"--css=style.css \\"
         f"--standalone \\"
-        f"-o './site/index.html' '/tmp/BLOG_index.md'"
+        f"-o '{index_html_file}' '/tmp/BLOG_index.md'"
     )
