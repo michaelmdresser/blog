@@ -1,1 +1,12 @@
 # blog
+
+## Helpful references for the Pandoc + Markdown approach
+
+- https://www.romangeber.com/static_websites_with_pandoc/
+- https://github.com/fcanas/bake/blob/master/template.tmp
+- https://ordecon.com/2020/07/pandoc-as-a-site-generator.html
+- https://github.com/ivanstojic/pandoc-ssg/blob/master/_pandoc/templates/default.html5
+- https://github.com/ivanstojic/pandoc-ssg/blob/master/Makefile
+- https://pandoc.org/MANUAL.html#templates
+- https://github.com/kjhealy/pandoc-templates/blob/master/templates/html.template
+- https://gist.github.com/killercup/5917178
