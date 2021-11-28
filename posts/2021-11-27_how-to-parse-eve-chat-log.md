@@ -29,7 +29,7 @@ of the information is not Lisp-specific.
 
 > Many thanks to [py-eve-chat-mon](https://github.com/andrewpmartinez/py-eve-chat-mon) which I
 > referenced heavily when trying to figure out the format of the log file and what regular
-> expressions to use for parsing. I also dove through several other 
+> expressions to use for parsing. 
 
 > Also, please note that I am very far from a Lisp expert. If you have any tips on improving this
 > code, give me a shout!
