@@ -43,6 +43,7 @@ for post in reversed(finished_posts):
     )
 
     title = None
+    date = None
     # super hacky header YAML parsing
     with open(full_post_path) as f:
         for line in f.readlines():
@@ -50,10 +51,19 @@ for post in reversed(finished_posts):
                 title = line.replace("title:", "").strip()
                 break
 
+    with open(full_post_path) as f:
+        for line in f.readlines():
+            if 'date:' in line:
+                date = line.replace("date:", "").strip()
+                break
+
     if title is None:
         raise Exception(f"failed to find title for post: {full_post_path}")
 
-    index_md += f"- [{title}]({output_post_path_relative}) \n"
+    if date is None:
+        raise Exception(f"failed to find date for post: {full_post_path}")
+
+    index_md += f"- {date} - [{title}]({output_post_path_relative}) \n"
 
     with open("/tmp/BLOG_index.md", "w") as f:
         f.write(index_md)

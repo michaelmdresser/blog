@@ -1,5 +1,6 @@
 ---
 title: How to parse EVE Online chat logs (in Common Lisp)
+date: 2021-11-27
 ---
 
 > If you'd like to skip straight to the details, [click here](#how-to-parse-the-logs)
