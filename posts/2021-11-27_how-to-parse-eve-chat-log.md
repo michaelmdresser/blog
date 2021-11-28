@@ -62,7 +62,7 @@ identifying the dash `-` characters that delimit the header region.
 
 ### Parse components of the message
 To then extract the relevant parts of the message (timestamp, author, message contents),
-I use the following (requires [CL-PPRCRE](http://edicl.github.io/cl-ppcre/)):
+I use the following (requires [CL-PPCRE](http://edicl.github.io/cl-ppcre/)):
 ```lisp
 (defparameter *message-parse-regex* "^.*\\[\\s+(.*?)\\s+\\]\\s(.*?)\\s>\\s(.*?)$")
 (defun parse-eve-chat-message (message)

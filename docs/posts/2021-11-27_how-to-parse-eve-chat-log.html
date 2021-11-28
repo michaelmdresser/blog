@@ -106,7 +106,7 @@
 <a class="sourceLine" id="cb2-12" title="12">             (<span class="kw">subseq</span> without-first-header-dashes (<span class="op">+</span> second-header-dashes <span class="dv">1</span>))))</a>
 <a class="sourceLine" id="cb2-13" title="13">    without-second-header-dashes))</a></code></pre></div>
 <h3 id="parse-components-of-the-message">Parse components of the message</h3>
-<p>To then extract the relevant parts of the message (timestamp, author, message contents), I use the following (requires <a href="http://edicl.github.io/cl-ppcre/">CL-PPRCRE</a>):</p>
+<p>To then extract the relevant parts of the message (timestamp, author, message contents), I use the following (requires <a href="http://edicl.github.io/cl-ppcre/">CL-PPCRE</a>):</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode lisp"><code class="sourceCode commonlisp"><a class="sourceLine" id="cb3-1" title="1">(<span class="kw">defparameter</span><span class="fu"> *message-parse-regex* </span><span class="st">&quot;^.*</span><span class="sc">\\</span><span class="st">[</span><span class="sc">\\</span><span class="st">s+(.*?)</span><span class="sc">\\</span><span class="st">s+</span><span class="sc">\\</span><span class="st">]</span><span class="sc">\\</span><span class="st">s(.*?)</span><span class="sc">\\</span><span class="st">s&gt;</span><span class="sc">\\</span><span class="st">s(.*?)$&quot;</span>)</a>
 <a class="sourceLine" id="cb3-2" title="2">(<span class="kw">defun</span><span class="fu"> parse-eve-chat-message </span>(message)</a>
 <a class="sourceLine" id="cb3-3" title="3">  (ppcre:register-groups-bind (timestamp author contents)</a>
