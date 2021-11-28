@@ -6,20 +6,20 @@ date: 2021-11-27
 > If you'd like to skip straight to the details, [click here](#how-to-parse-the-logs)
 
 [EVE Online](https://www.eveonline.com/) has many interesting properties that emerge
-from its "sandbox" environment, especially the areas referred to as "nullsec" that have
+from its "sandbox" environment, especially in the areas referred to as "nullsec" that have
 completely free-for-all PVP combat. Corporations (guilds, in common MMO parlance) form Alliances
 in nullsec, control regions of this slice of the in-game world, and perform various
-money-making activity there which often benefit (if only in safety) from the Alliance's control
+money-making activities there which often benefit from the Alliance's control
 of the area. To keep track of enemy activity in Alliance-controlled space, Alliances usually
 have a common intel-sharing chat channel (think something like an IRC channel), where players
-post messages like `R1O-GN 3`, indicating that 3 hostile players have been spotten in the
+post messages like `R1O-GN 3`, indicating that 3 hostile players have been spotted in the
 system `R1O-GN`. Players in the Alliance use this information to keep themselves safe by hiding
 or to seek out a fight by chasing down the enemies.
 
-EVE conveniently stores chat logs in a file on disk live. These logs can be found on Windows in
-the folder `C:\Users\yourusernamehere\Documents\EVE\logs\Chatlogs`. This presents an opportunity
-to build tooling around this data, which is available in a convenient text format for out-of-game tools
-to consume. Many EVE players have built tools around this data to provide audio alerts and visualizations
+EVE conveniently stores chat logs in a file on disk. These logs can be found on Windows in
+the folder `C:\Users\yourusernamehere\Documents\EVE\logs\Chatlogs`. This data is
+available in a convenient text format for out-of-game tools to consume. Many EVE players
+have built utilities that use this data to provide audio alerts and visualizations
 of the intel information. For my own education, and for the fun of it, I decided to create something
 similar in Common Lisp to suit my personal needs. What follows are some short notes on how to parse
 on-disk EVE logs into a usable format in Common Lisp. I hope that it can also help others, as much
