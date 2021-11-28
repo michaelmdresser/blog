@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" xml:lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>How to parse EVE Online chat logs (in Common Lisp)</title>
+        <style type="text/css">
+         a.sourceLine { display: inline-block; line-height: 1.25; }
+         a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+         a.sourceLine:empty { height: 1.2em; }
+         .sourceCode { overflow: visible; }
+         code.sourceCode { white-space: pre; position: relative; }
+         div.sourceCode { margin: 1em 0; }
+         pre.sourceCode { margin: 0; }
+         @media screen {
+         div.sourceCode { overflow: auto; }
+         }
+         @media print {
+         code.sourceCode { white-space: pre-wrap; }
+         a.sourceLine { text-indent: -1em; padding-left: 1em; }
+         }
+         pre.numberSource a.sourceLine
+           { position: relative; left: -4em; }
+         pre.numberSource a.sourceLine::before
+           { content: attr(title);
+             position: relative; left: -1em; text-align: right; vertical-align: baseline;
+             border: none; pointer-events: all; display: inline-block;
+             -webkit-touch-callout: none; -webkit-user-select: none;
+             -khtml-user-select: none; -moz-user-select: none;
+             -ms-user-select: none; user-select: none;
+             padding: 0 4px; width: 4em;
+             color: #aaaaaa;
+           }
+         pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+         div.sourceCode
+           {  }
+         @media screen {
+         a.sourceLine::before { text-decoration: underline; }
+         }
+         code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+         code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+         code span.at { color: #7d9029; } /* Attribute */
+         code span.bn { color: #40a070; } /* BaseN */
+         code span.bu { } /* BuiltIn */
+         code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+         code span.ch { color: #4070a0; } /* Char */
+         code span.cn { color: #880000; } /* Constant */
+         code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+         code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+         code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+         code span.dt { color: #902000; } /* DataType */
+         code span.dv { color: #40a070; } /* DecVal */
+         code span.er { color: #ff0000; font-weight: bold; } /* Error */
+         code span.ex { } /* Extension */
+         code span.fl { color: #40a070; } /* Float */
+         code span.fu { color: #06287e; } /* Function */
+         code span.im { } /* Import */
+         code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+         code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+         code span.op { color: #666666; } /* Operator */
+         code span.ot { color: #007020; } /* Other */
+         code span.pp { color: #bc7a00; } /* Preprocessor */
+         code span.sc { color: #4070a0; } /* SpecialChar */
+         code span.ss { color: #bb6688; } /* SpecialString */
+         code span.st { color: #4070a0; } /* String */
+         code span.va { color: #19177c; } /* Variable */
+         code span.vs { color: #4070a0; } /* VerbatimString */
+         code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+        </style>
+  <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        <h1>How to parse EVE Online chat logs (in Common Lisp)</h1>
+<blockquote>
+<p>If you’d like to skip straight to the details, <a href="#how-to-parse-the-logs">click here</a></p>
+</blockquote>
+<p><a href="https://www.eveonline.com/">EVE Online</a> has many interesting properties that emerge from its “sandbox” environment, especially the areas referred to as “nullsec” that have completely free-for-all PVP combat. Corporations (guilds, in common MMO parlance) form Alliances in nullsec, control regions of this slice of the in-game world, and perform various money-making activity there which often benefit (if only in safety) from the Alliance’s control of the area. To keep track of enemy activity in Alliance-controlled space, Alliances usually have a common intel-sharing chat channel (think something like an IRC channel), where players post messages like <code>R1O-GN 3</code>, indicating that 3 hostile players have been spotten in the system <code>R1O-GN</code>. Players in the Alliance use this information to keep themselves safe by hiding or to seek out a fight by chasing down the enemies.</p>
+<p>EVE conveniently stores chat logs in a file on disk live. These logs can be found on Windows in the folder <code>C:\Users\yourusernamehere\Documents\EVE\logs\Chatlogs</code>. This presents an opportunity to build tooling around this data, which is available in a convenient text format for out-of-game tools to consume. Many EVE players have built tools around this data to provide audio alerts and visualizations of the intel information. For my own education, and for the fun of it, I decided to create something similar in Common Lisp to suit my personal needs. What follows are some short notes on how to parse on-disk EVE logs into a usable format in Common Lisp. I hope that it can also help others, as much of the information is not Lisp-specific.</p>
+<h2 id="how-to-parse-the-logs">How to parse the logs</h2>
+<blockquote>
+<p>Many thanks to <a href="https://github.com/andrewpmartinez/py-eve-chat-mon">py-eve-chat-mon</a> which I referenced heavily when trying to figure out the format of the log file and what regular expressions to use for parsing. I also dove through several other</p>
+</blockquote>
+<blockquote>
+<p>Also, please note that I am very far from a Lisp expert. If you have any tips on improving this code, give me a shout!</p>
+</blockquote>
+<h3 id="read-the-log-file">Read the log file</h3>
+<p>EVE uses UTF-16LE for chat. In Common Lisp, you can use <code>UIOP</code> to read the lines from the file using the correct format:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode lisp"><code class="sourceCode commonlisp"><a class="sourceLine" id="cb1-1" title="1">(uiop:read-file-lines LOGFILE :external-format :utf-16le)</a></code></pre></div>
+<h3 id="remove-the-header">Remove the header</h3>
+<p>All chat logs come with a header, which I remove with a fairly hacky method that is based on identifying the dash <code>-</code> characters that delimit the header region.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode lisp"><code class="sourceCode commonlisp"><a class="sourceLine" id="cb2-1" title="1">(<span class="kw">defun</span><span class="fu"> line-is-header-dashesp </span>(chat-line)</a>
+<a class="sourceLine" id="cb2-2" title="2">  (<span class="kw">not</span> (<span class="kw">not</span> (substringp <span class="st">&quot;-----&quot;</span> chat-line))))</a>
+<a class="sourceLine" id="cb2-3" title="3"></a>
+<a class="sourceLine" id="cb2-4" title="4">(<span class="kw">defun</span><span class="fu"> remove-header-from </span>(chat-lines)</a>
+<a class="sourceLine" id="cb2-5" title="5">  (<span class="kw">let*</span> ((first-header-dashes</a>
+<a class="sourceLine" id="cb2-6" title="6">           (<span class="kw">position-if</span> #&#39;line-is-header-dashesp chat-lines))</a>
+<a class="sourceLine" id="cb2-7" title="7">         (without-first-header-dashes</a>
+<a class="sourceLine" id="cb2-8" title="8">             (<span class="kw">subseq</span> chat-lines (<span class="op">+</span> first-header-dashes <span class="dv">1</span>)))</a>
+<a class="sourceLine" id="cb2-9" title="9">         (second-header-dashes</a>
+<a class="sourceLine" id="cb2-10" title="10">           (<span class="kw">position-if</span> #&#39;line-is-header-dashesp without-first-header-dashes))</a>
+<a class="sourceLine" id="cb2-11" title="11">         (without-second-header-dashes</a>
+<a class="sourceLine" id="cb2-12" title="12">             (<span class="kw">subseq</span> without-first-header-dashes (<span class="op">+</span> second-header-dashes <span class="dv">1</span>))))</a>
+<a class="sourceLine" id="cb2-13" title="13">    without-second-header-dashes))</a></code></pre></div>
+<h3 id="parse-components-of-the-message">Parse components of the message</h3>
+<p>To then extract the relevant parts of the message (timestamp, author, message contents), I use the following (requires <a href="http://edicl.github.io/cl-ppcre/">CL-PPRCRE</a>):</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode lisp"><code class="sourceCode commonlisp"><a class="sourceLine" id="cb3-1" title="1">(<span class="kw">defparameter</span><span class="fu"> *message-parse-regex* </span><span class="st">&quot;^.*</span><span class="sc">\\</span><span class="st">[</span><span class="sc">\\</span><span class="st">s+(.*?)</span><span class="sc">\\</span><span class="st">s+</span><span class="sc">\\</span><span class="st">]</span><span class="sc">\\</span><span class="st">s(.*?)</span><span class="sc">\\</span><span class="st">s&gt;</span><span class="sc">\\</span><span class="st">s(.*?)$&quot;</span>)</a>
+<a class="sourceLine" id="cb3-2" title="2">(<span class="kw">defun</span><span class="fu"> parse-eve-chat-message </span>(message)</a>
+<a class="sourceLine" id="cb3-3" title="3">  (ppcre:register-groups-bind (timestamp author contents)</a>
+<a class="sourceLine" id="cb3-4" title="4">      (*message-parse-regex* message)</a>
+<a class="sourceLine" id="cb3-5" title="5">    <span class="co">;; Your code here</span></a>
+<a class="sourceLine" id="cb3-6" title="6">    ))</a></code></pre></div>
+<p>While I don’t think it should be necessary, the first <code>.*</code> (right after the <code>^</code>) is there because experimentally it didn’t work otherwise. I think it may have something to do with <a href="https://github.com/andrewpmartinez/py-eve-chat-mon/blob/31f7855abcbbe5de0d985ed9f7a8df54b9c3a635/py_eve_chat_mon/chat_message.py#L29">py-eve-chat-mon’s “chat line delimeter”</a> of <code>u"\ufeff"</code> which it removes from messages.</p>
+<h3 id="further-parse-the-timestamp">Further parse the timestamp</h3>
+<p>The timestamp can be further parsed, if necessary, with the following:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode lisp"><code class="sourceCode commonlisp"><a class="sourceLine" id="cb4-1" title="1">(<span class="kw">defparameter</span><span class="fu"> *timestamp-parse-regex*</span></a>
+<a class="sourceLine" id="cb4-2" title="2"><span class="st">&quot;([0-9][0-9][0-9][0-9])</span><span class="sc">\\</span><span class="st">.([0-9][0-9])</span><span class="sc">\\</span><span class="st">.([0-9][0-9]) ([0-9][0-9]):([0-9][0-9]):([0-9][0-9])&quot;</span>)</a>
+<a class="sourceLine" id="cb4-3" title="3"></a>
+<a class="sourceLine" id="cb4-4" title="4">(<span class="kw">defun</span><span class="fu"> parse-eve-chat-timestamp </span>(timestamp-string)</a>
+<a class="sourceLine" id="cb4-5" title="5">  (ppcre:register-groups-bind (year month day hour minute <span class="kw">second</span>)</a>
+<a class="sourceLine" id="cb4-6" title="6">      (*timestamp-parse-regex* raw-timestamp)</a>
+<a class="sourceLine" id="cb4-7" title="7">    <span class="co">;; Your code here</span></a>
+<a class="sourceLine" id="cb4-8" title="8">    ))</a></code></pre></div>
+    </body>
+</html>
