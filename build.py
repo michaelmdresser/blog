@@ -72,7 +72,7 @@ for post in reversed(finished_posts):
     os.system(
         f"pandoc \\"
         f"--data-dir='_pandoc' \\"
-        f"--template='_pandoc/templates/post.html' \\"
+        f"--template='_pandoc/templates/index.html' \\"
         f"--css=style.css \\"
         f"--standalone \\"
         f"-o '{index_html_file}' '/tmp/BLOG_index.md'"
