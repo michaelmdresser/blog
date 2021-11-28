@@ -70,6 +70,7 @@
   <link rel="stylesheet" href="/style.css">
     </head>
     <body>
+        <p><a href="/index.html">Home</a></p>
         <h1>How to parse EVE Online chat logs (in Common Lisp)</h1>
 
         <p>Date: 2021-11-27</p>
@@ -81,7 +82,7 @@
 <p>EVE conveniently stores chat logs in a file on disk. These logs can be found on Windows in the folder <code>C:\Users\yourusernamehere\Documents\EVE\logs\Chatlogs</code>. This data is available in a convenient text format for out-of-game tools to consume. Many EVE players have built utilities that use this data to provide audio alerts and visualizations of the intel information. For my own education, and for the fun of it, I decided to create something similar in Common Lisp to suit my personal needs. What follows are some short notes on how to parse on-disk EVE logs into a usable format in Common Lisp. I hope that it can also help others, as much of the information is not Lisp-specific.</p>
 <h2 id="how-to-parse-the-logs">How to parse the logs</h2>
 <blockquote>
-<p>Many thanks to <a href="https://github.com/andrewpmartinez/py-eve-chat-mon">py-eve-chat-mon</a> which I referenced heavily when trying to figure out the format of the log file and what regular expressions to use for parsing. I also dove through several other</p>
+<p>Many thanks to <a href="https://github.com/andrewpmartinez/py-eve-chat-mon">py-eve-chat-mon</a> which I referenced heavily when trying to figure out the format of the log file and what regular expressions to use for parsing.</p>
 </blockquote>
 <blockquote>
 <p>Also, please note that I am very far from a Lisp expert. If you have any tips on improving this code, give me a shout!</p>
