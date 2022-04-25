@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" xml:lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <title>Koka's effects: modify the log level of an HTTP handler at runtime</title>
+        <style type="text/css">
+         
+        </style>
+  <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        <p><a href="/index.html">Home</a></p>
+        <h1>Koka's effects: modify the log level of an HTTP handler at runtime</h1>
+
+        <p>Date: 2022-04-24</p>
+
+<p>Sometimes, when I'm debugging an HTTP handler, I wish I could set the log level to DEBUG just for one call to the handler.</p>
+<p>This would solve some problems:</p>
+<ol>
+<li>The application doesn't have to be restarted to change the log level. Changing arguments and restarting can be challenging in production environments or when the software is deployed in a user-controlled environment.</li>
+<li>I won't be flooded with DEBUG-level logs from parts of the application I probably don't care about</li>
+</ol>
+<p>With the <a href="https://koka-lang.github.io/koka/doc/index.html">Koka</a> language's effects, this seems possible. I'm new to the language and certainly won't be doing all of its merits justice, but let's see what changing the log level for a call stack/context (like an HTTP handler) at runtime might look like!</p>
+<h1 id="the-code">The code</h1>
+<p>First, we'll define our effect, <code>log</code>, which takes a level and a string and does… something.</p>
+<pre id="log" class="koka"><code>effect fun log( level : int, msg : string ) : ()
+</code></pre>
+<p>Let's write some mock business logic for our "HTTP handler": some calls to <code>log</code>. While not strictly necessary, it highlights Koka's effect system: the logic calls an effect, <code>log</code>, whose handler hasn't been defined yet — all it knows is the effect's type signature.</p>
+<pre id="http-handler-logic" class="koka"><code>fun http-handler-logic( foo : string , bar : string )
+  log(2, &quot;FOO:&quot; ++ foo)
+  log(3, &quot;BAR:&quot; ++ bar)
+</code></pre>
+<p>Next, we'll create an effect handler, <code>log-leveled</code>, that has different behavior depending on the log level. If the log level is within the target level's range, print the message. Otherwise, do nothing.</p>
+<pre id="log-leveled" class="koka"><code>fun level-to-string( level : int ) : string
+  match level
+    0 -&gt; &quot;ERROR&quot;
+    1 -&gt; &quot;WARNING&quot;
+    2 -&gt; &quot;INFO&quot;
+    3 -&gt; &quot;DEBUG&quot;
+    _ -&gt; &quot;UNKNOWN LEVEL&quot;
+
+fun log-leveled( target-level : int, action )
+  with fun log( level, msg ) {
+    if level &lt;= target-level then
+      println(level-to-string(level) ++ &quot;:&quot; ++ msg)
+  }
+
+  action()
+</code></pre>
+<p>Finally, our "HTTP handler." We'll set up the handler for <code>log</code> in this context by using <code>log-leveled</code>: depending on the value of <code>verbose</code>, calls to <code>log</code> will be set up to log at either the DEBUG level or the INFO level. A simple block of code, yet a fundamental difference from the global logger situation I'm so used to!</p>
+<pre id="http-handler" class="koka"><code>fun http-handler( verbose : bool )
+  var log-level := 2
+  if verbose then {
+    log-level := 3
+  }
+  with log-leveled(log-level)
+
+  return http-handler-logic(&quot;testfoo&quot;, &quot;testbar&quot;)
+</code></pre>
+<p>All we need is a <code>main()</code> to tie it all together. Please forgive the <code>&lt;&lt;&gt;&gt;</code> blocks, they're just tags to pull the earlier code in.</p>
+<pre id="main" class="koka" data-noweb="yes" data-results="output"><code>&lt;&lt;log&gt;&gt;
+&lt;&lt;http-handler-logic&gt;&gt;
+&lt;&lt;log-leveled&gt;&gt;
+&lt;&lt;http-handler&gt;&gt;
+
+fun main()
+  println(&quot;++Simulating a handler call with verbose=false&quot;)
+  http-handler(False)
+  println(&quot;++Done&quot;)
+
+  println(&quot;&quot;)
+
+  println(&quot;++Simulating a handler call with verbose=true&quot;)
+  http-handler(True)
+  println(&quot;++Done&quot;)
+</code></pre>
+<p>After <code>koka -e logtest.kk</code>:</p>
+<pre class="example"><code>compile: /tmp/babel-x4biMb/tmpR71zjj.kk
+loading: std/core
+loading: std/core/types
+loading: std/core/hnd
+check  : tmp/babel-x4biMb/tmpR71zjj
+linking: tmp_babel_dash_x4biMb_tmpR71zjj
+created: /tmp/.koka/v2.4.0/gcc-debug/tmp_babel_dash_x4biMb_tmpR71zjj
+
+++Simulating a handler call with verbose=false
+INFO:FOO:testfoo
+++Done
+
+++Simulating a handler call with verbose=true
+INFO:FOO:testfoo
+DEBUG:BAR:testbar
+++Done
+</code></pre>
+<p>Just like that, we've changed the log level for a call stack, dynamically, at run time!</p>
+<h1 id="thoughts">Thoughts</h1>
+<p>I'm fairly certain this technique can be generalized to a proper library for logging if given the proper care. Just think: using the effect system at startup time to set the log destination (<code>stdout</code>, <code>stderr</code>, a file) and default level, then using flags like our <code>verbose</code> to make an update for a given call! Awesome stuff.</p>
+<p>I'm uncertain what the performance overheads might be. An idea for another day, perhaps.</p>
+<h2 id="on-koka">On Koka</h2>
+<p>Koka is an interesting language. I'm new to the concept of effects, so the documentation is slow reading and the code often takes a few tries to wrap my head around. This mini-project happened because I was trying to explain what effects would actually be useful for to someone; I'm not familiar with any canonical use cases for effects, so I came up with this contrived one.</p>
+<p>The documentation could do with some improvement. For example, the "Basics" section skips past fundamental language constructs (like <code>if</code>) and focuses instead on some of Koka's more unique features. It'd help to start with more "basics" first.</p>
+    </body>
+</html>
