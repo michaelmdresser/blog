@@ -1,11 +1,8 @@
 #+TITLE: Koka's effects: modify the log level of an HTTP handler at runtime
 #+DATE: 2022-04-24
 
-Sometimes, when I'm debugging an HTTP handler, I say to myself:
-
-#+begin_quote
-I wish I could set the log level to DEBUG just for one call to the handler.
-#+end_quote
+Sometimes, when I'm debugging an HTTP handler, I wish I could set the log level
+to DEBUG just for one call to the handler.
 
 This would solve some problems:
 1. The application doesn't have to be restarted to change the log level. Changing arguments and restarting can
@@ -79,7 +76,7 @@ fun http-handler( verbose : bool )
 #+end_src
 
 All we need is a ~main()~ to tie it all together. Please forgive the ~<<>>~
-blocks, they're just an artifact that pull the earlier code in to be run.
+blocks, they're just tags to pull the earlier code in.
 #+NAME: main
 #+begin_src koka :noweb yes :results output
 <<log>>
@@ -133,7 +130,7 @@ stuff.
 I'm uncertain what the performance overheads might be. An idea for
 another day, perhaps.
 
-** On Koka, specifically
+** On Koka
 Koka is an interesting language. I'm new to the concept of effects, so the
 documentation is slow reading and the code often takes a few tries to wrap
 my head around. This mini-project happened because I was trying to explain
