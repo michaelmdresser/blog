@@ -1,43 +1,58 @@
-#+TITLE: Modify call stack log level at runtime using Koka's effects
+#+TITLE: Koka's effects: modify the log level of an HTTP handler at runtime
+#+DATE: 2022-04-24
 
 Sometimes, when I'm debugging an HTTP handler, I say to myself:
-> "I wish I could set the log level to DEBUG just for one call to the handler"
 
-This would solve a lot of problems:
-1. The application doesn't have to be restarted to change the log level
+#+begin_quote
+I wish I could set the log level to DEBUG just for one call to the handler.
+#+end_quote
+
+This would solve some problems:
+1. The application doesn't have to be restarted to change the log level. Changing arguments and restarting can
+   be challenging in production environments or when the software is deployed in
+   a user-controlled environment.
 2. I won't be flooded with DEBUG-level logs from parts of the application I probably don't care about
 
-With the [Koka](https://koka-lang.github.io/koka/doc/index.html) language's
-effects, this seems possible. I'm new to the language and certainly won't be
-doing all of its merits justice, but let's see what changing the log level for
-a call stack/context (like an HTTP handler) at runtime might look like!
+With the [[https://koka-lang.github.io/koka/doc/index.html][Koka]] language's effects, this seems possible. I'm new to the language
+and certainly won't be doing all of its merits justice, but let's see what
+changing the log level for a call stack/context (like an HTTP handler) at
+runtime might look like!
 
 * The code
 First, we'll define our effect, ~log~, which takes a level and a string and
-does something. We'll also add a helper function to convert a log level to
-a string for human readability.
-
-#+NAME: log-effect
+does... something.
+#+NAME: log
 #+begin_src koka
 effect fun log( level : int, msg : string ) : ()
+#+end_src
 
-fun level-to-string(level: int): string
+Let's write some mock business logic for our "HTTP handler": some calls to
+~log~. While not strictly necessary, it highlights Koka's effect system: the
+logic calls an effect, ~log~, whose handler hasn't been defined yet — all it
+knows is the effect's type signature.
+
+#+NAME: http-handler-logic
+#+begin_src koka
+fun http-handler-logic( foo : string , bar : string )
+  log(2, "FOO:" ++ foo)
+  log(3, "BAR:" ++ bar)
+#+end_src
+
+Next, we'll create an effect handler, ~log-leveled~, that has different
+behavior depending on the log level. If the log level is within the target
+level's range, print the message. Otherwise, do nothing.
+#+NAME: log-leveled
+#+begin_src koka
+fun level-to-string( level : int ) : string
   match level
     0 -> "ERROR"
     1 -> "WARNING"
     2 -> "INFO"
     3 -> "DEBUG"
     _ -> "UNKNOWN LEVEL"
-#+end_src
 
-Next, we'll create our handler that has different behavior depending on the
-log level. If the log level is within the target level's range, print the
-message. Otherwise, do nothing.
-
-#+NAME: log-leveled
-#+begin_src koka
-fun log-leveled(target-level : int, action)
-  with fun log(level, msg) {
+fun log-leveled( target-level : int, action )
+  with fun log( level, msg ) {
     if level <= target-level then
       println(level-to-string(level) ++ ":" ++ msg)
   }
@@ -45,23 +60,13 @@ fun log-leveled(target-level : int, action)
   action()
 #+end_src
 
-Let's write some "business logic" for our HTTP handler. While not strictly
-necessary, it highlights Koka's effect system. It's calling an effect, ~log~,
-whose handler _hasn't been defined yet_, all it knows is the effect's type
-signature.
 
-#+NAME: handler-logic
-#+begin_src koka
-fun http-handler-logic(foo: string, bar: string)
-  log(0, "test error level")
-  log(1, "test warning level")
-  log(2, "FOO:" ++ foo)
-  log(3, "BAR:" ++ bar)
-#+end_src
-
-Finally, our "HTTP handler," which configures the ~log~ effect's handler differently based on a flag. If ~verbose = true~, we'll set the log level to
-DEBUG.
-#+NAME: handler
+Finally, our "HTTP handler." We'll set up the handler for ~log~ in this context
+by using ~log-leveled~: depending on the value of ~verbose~, calls to ~log~ will
+be set up to log at either the DEBUG level or the INFO level. A simple block of
+code, yet a fundamental difference from the global logger situation I'm so used
+to!
+#+NAME: http-handler
 #+begin_src koka
 fun http-handler( verbose : bool )
   var log-level := 2
@@ -73,16 +78,14 @@ fun http-handler( verbose : bool )
   return http-handler-logic("testfoo", "testbar")
 #+end_src
 
-All we need is a ~main()~ to tie it all together.
+All we need is a ~main()~ to tie it all together. Please forgive the ~<<>>~
+blocks, they're just an artifact that pull the earlier code in to be run.
 #+NAME: main
 #+begin_src koka :noweb yes :results output
-<<log-effect>>
-
+<<log>>
+<<http-handler-logic>>
 <<log-leveled>>
-
-<<handler-logic>>
-
-<<handler>>
+<<http-handler>>
 
 fun main()
   println("++Simulating a handler call with verbose=false")
@@ -96,29 +99,48 @@ fun main()
   println("++Done")
 #+end_src
 
-And just like that, we've changed the log level for a call stack, dynamically,
-at run time!
+After ~koka -e logtest.kk~:
 #+RESULTS: main
 #+begin_example
-compile: /tmp/babel-x4biMb/tmpiRQ8Iu.kk
+compile: /tmp/babel-x4biMb/tmpR71zjj.kk
 loading: std/core
 loading: std/core/types
 loading: std/core/hnd
-check  : tmp/babel-x4biMb/tmpiRQ8Iu
-linking: tmp_babel_dash_x4biMb_tmpiRQ8Iu
-created: /tmp/.koka/v2.4.0/gcc-debug/tmp_babel_dash_x4biMb_tmpiRQ8Iu
+check  : tmp/babel-x4biMb/tmpR71zjj
+linking: tmp_babel_dash_x4biMb_tmpR71zjj
+created: /tmp/.koka/v2.4.0/gcc-debug/tmp_babel_dash_x4biMb_tmpR71zjj
 
 ++Simulating a handler call with verbose=false
-ERROR:test error level
-WARNING:test warning level
 INFO:FOO:testfoo
 ++Done
 
 ++Simulating a handler call with verbose=true
-ERROR:test error level
-WARNING:test warning level
 INFO:FOO:testfoo
 DEBUG:BAR:testbar
 ++Done
 #+end_example
 
+Just like that, we've changed the log level for a call stack, dynamically,
+at run time!
+
+* Thoughts
+I'm fairly certain this technique can be generalized to a proper library for
+logging if given the proper care. Just think: using the effect system at startup
+time to set the log destination (~stdout~, ~stderr~, a file) and default level,
+then using flags like our ~verbose~ to make an update for a given call! Awesome
+stuff.
+
+I'm uncertain what the performance overheads might be. An idea for
+another day, perhaps.
+
+** On Koka, specifically
+Koka is an interesting language. I'm new to the concept of effects, so the
+documentation is slow reading and the code often takes a few tries to wrap
+my head around. This mini-project happened because I was trying to explain
+what effects would actually be useful for to someone; I'm not familiar with
+any canonical use cases for effects, so I came up with this contrived one.
+
+The documentation could do with some improvement. For example, the "Basics"
+section skips past fundamental language constructs (like ~if~) and focuses
+instead on some of Koka's more unique features. It'd help to start with more
+"basics" first.
