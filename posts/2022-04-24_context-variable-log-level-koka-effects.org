@@ -1,0 +1,124 @@
+#+TITLE: Modify call stack log level at runtime using Koka's effects
+
+Sometimes, when I'm debugging an HTTP handler, I say to myself:
+> "I wish I could set the log level to DEBUG just for one call to the handler"
+
+This would solve a lot of problems:
+1. The application doesn't have to be restarted to change the log level
+2. I won't be flooded with DEBUG-level logs from parts of the application I probably don't care about
+
+With the [Koka](https://koka-lang.github.io/koka/doc/index.html) language's
+effects, this seems possible. I'm new to the language and certainly won't be
+doing all of its merits justice, but let's see what changing the log level for
+a call stack/context (like an HTTP handler) at runtime might look like!
+
+* The code
+First, we'll define our effect, ~log~, which takes a level and a string and
+does something. We'll also add a helper function to convert a log level to
+a string for human readability.
+
+#+NAME: log-effect
+#+begin_src koka
+effect fun log( level : int, msg : string ) : ()
+
+fun level-to-string(level: int): string
+  match level
+    0 -> "ERROR"
+    1 -> "WARNING"
+    2 -> "INFO"
+    3 -> "DEBUG"
+    _ -> "UNKNOWN LEVEL"
+#+end_src
+
+Next, we'll create our handler that has different behavior depending on the
+log level. If the log level is within the target level's range, print the
+message. Otherwise, do nothing.
+
+#+NAME: log-leveled
+#+begin_src koka
+fun log-leveled(target-level : int, action)
+  with fun log(level, msg) {
+    if level <= target-level then
+      println(level-to-string(level) ++ ":" ++ msg)
+  }
+
+  action()
+#+end_src
+
+Let's write some "business logic" for our HTTP handler. While not strictly
+necessary, it highlights Koka's effect system. It's calling an effect, ~log~,
+whose handler _hasn't been defined yet_, all it knows is the effect's type
+signature.
+
+#+NAME: handler-logic
+#+begin_src koka
+fun http-handler-logic(foo: string, bar: string)
+  log(0, "test error level")
+  log(1, "test warning level")
+  log(2, "FOO:" ++ foo)
+  log(3, "BAR:" ++ bar)
+#+end_src
+
+Finally, our "HTTP handler," which configures the ~log~ effect's handler differently based on a flag. If ~verbose = true~, we'll set the log level to
+DEBUG.
+#+NAME: handler
+#+begin_src koka
+fun http-handler( verbose : bool )
+  var log-level := 2
+  if verbose then {
+    log-level := 3
+  }
+  with log-leveled(log-level)
+
+  return http-handler-logic("testfoo", "testbar")
+#+end_src
+
+All we need is a ~main()~ to tie it all together.
+#+NAME: main
+#+begin_src koka :noweb yes :results output
+<<log-effect>>
+
+<<log-leveled>>
+
+<<handler-logic>>
+
+<<handler>>
+
+fun main()
+  println("++Simulating a handler call with verbose=false")
+  http-handler(False)
+  println("++Done")
+
+  println("")
+
+  println("++Simulating a handler call with verbose=true")
+  http-handler(True)
+  println("++Done")
+#+end_src
+
+And just like that, we've changed the log level for a call stack, dynamically,
+at run time!
+#+RESULTS: main
+#+begin_example
+compile: /tmp/babel-x4biMb/tmpiRQ8Iu.kk
+loading: std/core
+loading: std/core/types
+loading: std/core/hnd
+check  : tmp/babel-x4biMb/tmpiRQ8Iu
+linking: tmp_babel_dash_x4biMb_tmpiRQ8Iu
+created: /tmp/.koka/v2.4.0/gcc-debug/tmp_babel_dash_x4biMb_tmpiRQ8Iu
+
+++Simulating a handler call with verbose=false
+ERROR:test error level
+WARNING:test warning level
+INFO:FOO:testfoo
+++Done
+
+++Simulating a handler call with verbose=true
+ERROR:test error level
+WARNING:test warning level
+INFO:FOO:testfoo
+DEBUG:BAR:testbar
+++Done
+#+end_example
+
