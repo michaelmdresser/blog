@@ -15,7 +15,7 @@
 
         <p>Date: 2022-04-24</p>
 
-<p>Sometimes, when I'm debugging an HTTP handler, I wish I could set the log level to DEBUG just for one call to the handler.</p>
+<p>Sometimes, when I'm debugging an HTTP handler, I wish I could set the log level to DEBUG for just one call to the handler.</p>
 <p>This would solve some problems:</p>
 <ol>
 <li>The application doesn't have to be restarted to change the log level. Changing arguments and restarting can be challenging in production environments or when the software is deployed in a user-controlled environment.</li>
@@ -26,12 +26,12 @@
 <p>First, we'll define our effect, <code>log</code>, which takes a level and a string and does… something.</p>
 <pre id="log" class="koka"><code>effect fun log( level : int, msg : string ) : ()
 </code></pre>
-<p>Let's write some mock business logic for our "HTTP handler": some calls to <code>log</code>. While not strictly necessary, it highlights Koka's effect system: the logic calls an effect, <code>log</code>, whose handler hasn't been defined yet — all it knows is the effect's type signature.</p>
+<p>Let's write some mock business logic for our "HTTP handler": some calls to <code>log</code>. This highlights Koka's effect system. The logic calls an effect, <code>log</code>, whose handler hasn't been defined yet — all it knows is the effect's type signature.</p>
 <pre id="http-handler-logic" class="koka"><code>fun http-handler-logic( foo : string , bar : string )
   log(2, &quot;FOO:&quot; ++ foo)
   log(3, &quot;BAR:&quot; ++ bar)
 </code></pre>
-<p>Next, we'll create an effect handler, <code>log-leveled</code>, that has different behavior depending on the log level. If the log level is within the target level's range, print the message. Otherwise, do nothing.</p>
+<p>Next, we'll create a function that sets up an effect handler for <code>log</code>: <code>log-leveled</code>, which has different behavior depending on the log level. If the log level is within the target level's range, print the message. Otherwise, do nothing.</p>
 <pre id="log-leveled" class="koka"><code>fun level-to-string( level : int ) : string
   match level
     0 -&gt; &quot;ERROR&quot;
@@ -76,15 +76,7 @@ fun main()
   println(&quot;++Done&quot;)
 </code></pre>
 <p>After <code>koka -e logtest.kk</code>:</p>
-<pre class="example"><code>compile: /tmp/babel-x4biMb/tmpR71zjj.kk
-loading: std/core
-loading: std/core/types
-loading: std/core/hnd
-check  : tmp/babel-x4biMb/tmpR71zjj
-linking: tmp_babel_dash_x4biMb_tmpR71zjj
-created: /tmp/.koka/v2.4.0/gcc-debug/tmp_babel_dash_x4biMb_tmpR71zjj
-
-++Simulating a handler call with verbose=false
+<pre class="example"><code>++Simulating a handler call with verbose=false
 INFO:FOO:testfoo
 ++Done
 

@@ -2,7 +2,7 @@
 #+DATE: 2022-04-24
 
 Sometimes, when I'm debugging an HTTP handler, I wish I could set the log level
-to DEBUG just for one call to the handler.
+to DEBUG for just one call to the handler.
 
 This would solve some problems:
 1. The application doesn't have to be restarted to change the log level. Changing arguments and restarting can
@@ -24,7 +24,7 @@ effect fun log( level : int, msg : string ) : ()
 #+end_src
 
 Let's write some mock business logic for our "HTTP handler": some calls to
-~log~. While not strictly necessary, it highlights Koka's effect system: the
+~log~. This highlights Koka's effect system. The
 logic calls an effect, ~log~, whose handler hasn't been defined yet — all it
 knows is the effect's type signature.
 
@@ -35,7 +35,7 @@ fun http-handler-logic( foo : string , bar : string )
   log(3, "BAR:" ++ bar)
 #+end_src
 
-Next, we'll create an effect handler, ~log-leveled~, that has different
+Next, we'll create a function that sets up an effect handler for ~log~: ~log-leveled~, which has different
 behavior depending on the log level. If the log level is within the target
 level's range, print the message. Otherwise, do nothing.
 #+NAME: log-leveled
@@ -99,14 +99,6 @@ fun main()
 After ~koka -e logtest.kk~:
 #+RESULTS: main
 #+begin_example
-compile: /tmp/babel-x4biMb/tmpR71zjj.kk
-loading: std/core
-loading: std/core/types
-loading: std/core/hnd
-check  : tmp/babel-x4biMb/tmpR71zjj
-linking: tmp_babel_dash_x4biMb_tmpR71zjj
-created: /tmp/.koka/v2.4.0/gcc-debug/tmp_babel_dash_x4biMb_tmpR71zjj
-
 ++Simulating a handler call with verbose=false
 INFO:FOO:testfoo
 ++Done
