@@ -1,5 +1,19 @@
 # blog
 
+Building:
+
+``` sh
+# Update the list with new posts
+python3 build.py
+```
+
+Running a test local version of the blog
+
+``` sh
+cd docs
+python3 -m http.server 8000
+```
+
 ## Helpful references for the Pandoc + Markdown approach
 
 - https://www.romangeber.com/static_websites_with_pandoc/

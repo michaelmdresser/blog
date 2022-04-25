@@ -10,6 +10,7 @@ output_posts_directory = join(output_directory, "posts")
 
 finished_posts = [
     "2021-11-27_how-to-parse-eve-chat-log.md",
+    "2022-04-24_context-variable-log-level-koka-effects.org",
 ]
 
 
@@ -51,10 +52,21 @@ for post in reversed(finished_posts):
                 title = line.replace("title:", "").strip()
                 break
 
+            # for .org files
+            if '#+TITLE:' in line:
+                title = line.replace('#+TITLE:', "").strip()
+                break
+
+
     with open(full_post_path) as f:
         for line in f.readlines():
             if 'date:' in line:
                 date = line.replace("date:", "").strip()
+                break
+
+            # for .org files
+            if '#+DATE:' in line:
+                date = line.replace('#+DATE:', "").strip()
                 break
 
     if title is None:
