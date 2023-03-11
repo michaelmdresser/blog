@@ -1,0 +1,273 @@
+#+TITLE: Rapid local development of custom Docker-based GitHub Actions
+#+DATE: 2023-03-10
+
+I found the available documentation for [[https://docs.github.com/en/actions/creating-actions][custom GitHub Actions]] to be lacking
+in the testing department, particularly for custom Actions using external
+Docker containers. I want a rapid, local testing experience that avoids
+the following pieces of overhead:
+
+- Pushing a Docker container image to a remote repository on every code change
+- Pulling a Docker container image from remote repository on every code change
+- Pushing work-in-progress code changes to the [[https://docs.github.com/en/actions/creating-actions/creating-a-docker-container-action#creating-an-action-metadata-file][action.yaml]] to a (public) remote GitHub repository
+
+* Setup
+I'll set up a concrete example to explain the problem.
+
+** The initial project
+Let's say I have a Go project, in a _private repository_, that looks like this:
+#+begin_example
+custom-action-demo-code
+├── cmd
+│   ├── myproject
+│   │   └── main.go
+├── go.mod
+└── pkg
+    └── mylib
+        └── mylib.go
+#+end_example
+
+#+NAME: myproject-main
+#+begin_example go
+package main
+import (
+	"fmt"
+	"github.com/michaelmdresser/custom-action-demo-code/pkg/mylib"
+)
+func main() {
+	fmt.Println("Hello! This is the main project.")
+	mylib.PrintSomething()
+}
+#+end_example
+
+#+NAME: mylib
+#+begin_example go
+package mylib
+import ( "fmt" )
+func PrintSomething() {
+	fmt.Println("something!")
+}
+#+end_example
+
+I normally distribute this project by building ~cmd/myproject/main.go~ and
+distributing the binary (possibly with Docker).
+
+** The need for a custom Action
+I now want to build a variant of this project which depends on ~package mylib~ and I want to turn it into a publicly-available GitHub Action.
+
+First, let's update the project a bit for this use-case.
+#+begin_example
+custom-action-demo-code
+├── cmd
+│   ├── myproject
+│   │   └── main.go
+│   └── myprojectvariant
+│       ├── Dockerfile
+│       └── main.go
+├── go.mod
+└── pkg
+    └── mylib
+        └── mylib.go
+#+end_example
+
+#+NAME: myprojectvariant-main
+#+begin_example go
+package main
+import (
+	"fmt"
+	"github.com/michaelmdresser/custom-action-demo-code/pkg/mylib"
+)
+func main() {
+	fmt.Println("Hello! This is the variant of the project that will be run in my custom GitHub Action.")
+	mylib.PrintSomething()
+}
+#+end_example
+
+#+NAME: myprojectvariant-dockerfile
+#+begin_example Dockerfile
+# A multistage build is better and smaller,
+# but is omitted for brevity
+FROM go:latest
+COPY go.mod go.mod
+COPY pkg pkg
+COPY cmd cmd
+RUN ["go", "build", "-o", "myprojectvariant", "cmd/myprojectvariant/main.go"]
+CMD ["myprojectvariant"]
+#+end_example
+
+The program I want to run in my custom Action is ~cmd/myprojectvariant/main.go~, packaged via the ~Dockerfile~.
+
+* Problem: My source is closed
+
+For my Action to be available to the public, it's definition file
+"~action.yaml~" must be in a public GitHub repository. However, my project is
+closed source and I don't want to open source it just for the sake of making my
+Action. This means the following type of custom Docker action is invalid because
+it would require my source code to be publicly available:
+#+begin_example yaml
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+#+end_example
+
+Fortunately, GitHub has provided an answer. Docker Actions can [[https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#example-using-public-docker-registry-container][use a pre-built container]]:
+#+begin_example yaml
+runs:
+  using: 'docker'
+  image: 'docker://debian:stretch-slim'
+#+end_example
+
+This means I can build a Docker image from my closed-source code and
+reference that image in the open-source ~action.yaml~.
+
+I'll make a new public repo for my ~action.yaml~ and add a testing Actions workflow.
+
+#+begin_example
+custom-action-demo
+├── .github
+│   └── workflows
+│       └── test.yaml
+├── README.md
+└── action.yaml
+#+end_example
+
+#+NAME: custom-action-definition
+#+begin_example yaml
+name: 'Run my project variant'
+description: 'Runs an external Docker container containing my project variant'
+runs:
+  using: 'docker'
+  image: 'docker://myprojectvariant:12345'
+#+end_example
+
+#+NAME: custom-action-test-workflow
+#+begin_example yaml
+name: Test
+on: [workflow_dispatch]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the current version of the repository
+        uses: actions/checkout@v3
+
+      - name: Run the current version of the custom Action
+        # This is an interesting way to call a locally-defined action.yaml.
+        # The path is expection to contain a file called action.yaml or
+        # action.yml which will be run as the Action.
+        #
+        # If action.yaml is in a subfolder of the respository then this uses:
+        # statemement should contain the path of the folder container the
+        # action.
+        #
+        # E.g. if the action is in ./actions/foo/action.yaml, the statement
+        # should be "uses: ./actions/foo"
+        uses: ./
+#+end_example
+
+* Problem: Remote development makes for bad testing
+
+There are problems with the testing experience, however. They center around the fact that the ~action.yaml~ lives in a public repository
+and a full test cycle might look something like this:
+1. Update ~mylib.go~
+2. Build a new Docker image
+3. Push the new Docker image to a public registry
+4. Update ~action.yaml~ with the new image tag
+5. Push the ~action.yaml~ update to the public GitHub repository
+6. Trigger a test run of ~action.yaml~ on the public GitHub repository
+
+This is slow.
+- 3 involves potentially a lot of data flowing over a network connection
+- 5 involves a small amount of network overhead
+- 6 involves time overhead to due the costs of spinning up a GitHub Actions runner and pulling a copy of the new Docker image over the network
+
+There are some bonus problems beyond speed:
+- 3, 4, and 5 publish functionality that may not be ready for public consumption
+- 3 could incur cost overheads if you are billed for registry space
+- 6 could incur cost overheads because GitHub Actions runners aren't free
+
+How do we solve these problems? Local testing! There is an amazing project called [[https://github.com/nektos/act][act]] which is designed for testing Actions workflows locally. Because our custom Action test is a workflow, we can use ~act~ to test our custom Action with a little extra work.
+
+In the repository with ~action.yaml~:
+#+begin_example
+$ act -l
+Stage  Job ID  Job name  Workflow name  Workflow file  Events
+0      test    test      Test           test.yaml      workflow_dispatch
+#+end_example
+
+And we can run our test job with ~act -j test~. This eliminates most problems
+with steps 4, 5, and 6 of our original test workflow.
+
+With a little extra work, we can eliminate the rest by taking advantage of our
+local Docker registry, which ~act~ is fully capable of pulling images from when running our custom Action.
+
+Here's the new testing workflow:
+1. Update ~mylib.go~
+2. Build a new Docker image
+3. Update ~action.yaml~ with the new (local) image tag
+4. Test with ~act -j test~
+
+I'm going to wrap steps 2, 3, and 4 up using [[https://github.com/casey/just][just]]; feel free to use your
+favorite tool instead, like make or a simple script.
+
+#+begin_example
+custom-action-demo
+├── .github
+│   └── workflows
+│       └── test.yaml
+├── README.md
+├── action.yaml
+└── justfile
+#+end_example
+
+#+NAME: justfile
+#+begin_example justfile
+tag := `date -u +%s`
+image := "myprojectvariant:" + tag
+
+build:
+    cd ../custom-action-demo-code && docker build -f ./cmd/myprojectvariant/Dockerfile . -t "{{image}}"
+
+updateaction:
+    sed -i 's|^  image:.*$|  image: "docker://{{image}}"|' action.yaml
+
+test: build updateaction
+    # --pull=false explanation:
+    # https://github.com/nektos/act/issues/1594#issuecomment-1413067760
+    ./bin/act -j test --pull=false
+#+end_example
+
+Now a simple ~just test~ will build the image, update the Action, and run our
+test job locally!
+
+** Bonus: Building a Go project with Docker is slow
+If you want to save even more time in local development, the ~go build~ step
+can be done locally to take advantage of the Go toolchain's caching. The
+resulting binary is then copied into a Docker container.
+
+#+NAME: justfile-faster
+#+begin_example justfile
+tag := `date -u +%s`
+image := "myprojectvariant:" + tag
+
+# These ensure the built binary will work in the alpine container
+buildenv := "GOOS=linux GARCH=amd64 CGO_ENABLED=0"
+
+build:
+    cd ../custom-action-demo-code && {{buildenv}} go build -o myprojectvariant cmd/myprojectvariant/main.go
+    cd ../custom-action-demo-code && docker build -f ./cmd/myprojectvariant/Dockerfile . -t "{{image}}"
+
+updateaction:
+    sed -i 's|^  image:.*$|  image: "docker://{{image}}"|' action.yaml
+
+test: build updateaction
+    # --pull=false explanation:
+    # https://github.com/nektos/act/issues/1594#issuecomment-1413067760
+    ./bin/act -j test --pull=false
+#+end_example
+
+#+NAME: dockerfile-fast
+#+begin_example Dockerfile
+FROM alpine:latest
+COPY myprojectvariant /project/myprojectvariant
+CMD ["/project/myprojectvariant"]
+#+end_example
