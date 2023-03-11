@@ -11,6 +11,7 @@ output_posts_directory = join(output_directory, "posts")
 finished_posts = [
     "2021-11-27_how-to-parse-eve-chat-log.md",
     "2022-04-24_context-variable-log-level-koka-effects.org",
+    "2023-03-11_custom-github-action-rapid-development.org",
 ]
 
 

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en" xml:lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <title>Rapid local development of custom Docker GitHub Actions</title>
+        <style type="text/css">
+         a.sourceLine { display: inline-block; line-height: 1.25; }
+         a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+         a.sourceLine:empty { height: 1.2em; }
+         .sourceCode { overflow: visible; }
+         code.sourceCode { white-space: pre; position: relative; }
+         div.sourceCode { margin: 1em 0; }
+         pre.sourceCode { margin: 0; }
+         @media screen {
+         div.sourceCode { overflow: auto; }
+         }
+         @media print {
+         code.sourceCode { white-space: pre-wrap; }
+         a.sourceLine { text-indent: -1em; padding-left: 1em; }
+         }
+         pre.numberSource a.sourceLine
+           { position: relative; left: -4em; }
+         pre.numberSource a.sourceLine::before
+           { content: attr(title);
+             position: relative; left: -1em; text-align: right; vertical-align: baseline;
+             border: none; pointer-events: all; display: inline-block;
+             -webkit-touch-callout: none; -webkit-user-select: none;
+             -khtml-user-select: none; -moz-user-select: none;
+             -ms-user-select: none; user-select: none;
+             padding: 0 4px; width: 4em;
+             color: #aaaaaa;
+           }
+         pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+         div.sourceCode
+           {  }
+         @media screen {
+         a.sourceLine::before { text-decoration: underline; }
+         }
+         code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+         code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+         code span.at { color: #7d9029; } /* Attribute */
+         code span.bn { color: #40a070; } /* BaseN */
+         code span.bu { } /* BuiltIn */
+         code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+         code span.ch { color: #4070a0; } /* Char */
+         code span.cn { color: #880000; } /* Constant */
+         code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+         code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+         code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+         code span.dt { color: #902000; } /* DataType */
+         code span.dv { color: #40a070; } /* DecVal */
+         code span.er { color: #ff0000; font-weight: bold; } /* Error */
+         code span.ex { } /* Extension */
+         code span.fl { color: #40a070; } /* Float */
+         code span.fu { color: #06287e; } /* Function */
+         code span.im { } /* Import */
+         code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+         code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+         code span.op { color: #666666; } /* Operator */
+         code span.ot { color: #007020; } /* Other */
+         code span.pp { color: #bc7a00; } /* Preprocessor */
+         code span.sc { color: #4070a0; } /* SpecialChar */
+         code span.ss { color: #bb6688; } /* SpecialString */
+         code span.st { color: #4070a0; } /* String */
+         code span.va { color: #19177c; } /* Variable */
+         code span.vs { color: #4070a0; } /* VerbatimString */
+         code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+        </style>
+  <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        <p><a href="/index.html">Home</a></p>
+        <h1>Rapid local development of custom Docker GitHub Actions</h1>
+
+        <p>Date: 2023-03-11</p>
+
+<p>Developing a <a href="https://docs.github.com/en/actions/creating-actions">custom GitHub Action</a> that uses a Docker image is slow. Documentation for how to build an Action on top of closed-source code is hard to find. This post aims to fill the documentation gap and provide a solution to the slow development problem.</p>
+<p>I'll lay out a simple "private" Go project to use as a basis for a custom Action, explain how to build a public Action for the project, and finally construct a fast, local toolchain for development.</p>
+<h1 id="the-initial-project">The initial project</h1>
+<p>Let's say we have a Go project in a <strong>private repository</strong> that looks like this:</p>
+<pre class="example"><code>custom-action-demo-code
+├── cmd
+│   ├── myproject
+│   │   └── main.go
+├── go.mod
+└── pkg
+    └── mylib
+        └── mylib.go
+</code></pre>
+<div class="sourceCode" id="myproject-main"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="myproject-main-1" title="1"><span class="co">// cmd/myproject/main.go</span></a>
+<a class="sourceLine" id="myproject-main-2" title="2"><span class="kw">package</span> main</a>
+<a class="sourceLine" id="myproject-main-3" title="3"><span class="kw">import</span> (</a>
+<a class="sourceLine" id="myproject-main-4" title="4">    <span class="st">&quot;fmt&quot;</span></a>
+<a class="sourceLine" id="myproject-main-5" title="5">    <span class="st">&quot;github.com/michaelmdresser/custom-action-demo-code/pkg/mylib&quot;</span></a>
+<a class="sourceLine" id="myproject-main-6" title="6">)</a>
+<a class="sourceLine" id="myproject-main-7" title="7"><span class="kw">func</span> main() {</a>
+<a class="sourceLine" id="myproject-main-8" title="8">    fmt.Println(<span class="st">&quot;Hello! This is the main project.&quot;</span>)</a>
+<a class="sourceLine" id="myproject-main-9" title="9">    mylib.PrintSomething()</a>
+<a class="sourceLine" id="myproject-main-10" title="10">}</a></code></pre></div>
+<div class="sourceCode" id="mylib"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="mylib-1" title="1"><span class="co">// pkg/mylib/mylib.go</span></a>
+<a class="sourceLine" id="mylib-2" title="2"><span class="kw">package</span> mylib</a>
+<a class="sourceLine" id="mylib-3" title="3"><span class="kw">import</span> ( <span class="st">&quot;fmt&quot;</span> )</a>
+<a class="sourceLine" id="mylib-4" title="4"><span class="kw">func</span> PrintSomething() {</a>
+<a class="sourceLine" id="mylib-5" title="5">    fmt.Println(<span class="st">&quot;something!&quot;</span>)</a>
+<a class="sourceLine" id="mylib-6" title="6">}</a></code></pre></div>
+<p>We normally release this project by building <code>cmd/myproject/main.go</code> and distributing the binary (possibly with Docker).</p>
+<h1 id="turning-the-project-into-a-github-action">Turning the project into a GitHub Action</h1>
+<p>We now want to build a variant of this project to be distributed as a publicly-available GitHub Action.</p>
+<p>First, let's update the project a bit for this use-case.</p>
+<pre class="example"><code>custom-action-demo-code
+├── cmd
+│   ├── myproject
+│   │   └── main.go
+│   └── myprojectvariant
+│       ├── Dockerfile
+│       └── main.go
+├── go.mod
+└── pkg
+    └── mylib
+        └── mylib.go
+</code></pre>
+<div class="sourceCode" id="myprojectvariant-main"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="myprojectvariant-main-1" title="1"><span class="co">// cmd/myprojectvariant/main.go</span></a>
+<a class="sourceLine" id="myprojectvariant-main-2" title="2"><span class="kw">package</span> main</a>
+<a class="sourceLine" id="myprojectvariant-main-3" title="3"><span class="kw">import</span> (</a>
+<a class="sourceLine" id="myprojectvariant-main-4" title="4">    <span class="st">&quot;fmt&quot;</span></a>
+<a class="sourceLine" id="myprojectvariant-main-5" title="5">    <span class="st">&quot;github.com/michaelmdresser/custom-action-demo-code/pkg/mylib&quot;</span></a>
+<a class="sourceLine" id="myprojectvariant-main-6" title="6">)</a>
+<a class="sourceLine" id="myprojectvariant-main-7" title="7"><span class="kw">func</span> main() {</a>
+<a class="sourceLine" id="myprojectvariant-main-8" title="8">    fmt.Println(<span class="st">&quot;Hello! This is the variant.&quot;</span>)</a>
+<a class="sourceLine" id="myprojectvariant-main-9" title="9">    mylib.PrintSomething()</a>
+<a class="sourceLine" id="myprojectvariant-main-10" title="10">}</a></code></pre></div>
+<div class="sourceCode" id="myprojectvariant-dockerfile"><pre class="sourceCode Dockerfile"><code class="sourceCode dockerfile"><a class="sourceLine" id="myprojectvariant-dockerfile-1" title="1"><span class="co"># cmd/myprojectvariant/Dockerfile</span></a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-2" title="2"><span class="kw">FROM</span> golang:latest as builder</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-3" title="3"><span class="kw">WORKDIR</span> /project</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-4" title="4"><span class="kw">COPY</span> . .</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-5" title="5"><span class="kw">RUN</span> [<span class="st">&quot;go&quot;</span>, <span class="st">&quot;build&quot;</span>, <span class="st">&quot;-o&quot;</span>, <span class="st">&quot;/project/out&quot;</span>,</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-6" title="6">     <span class="st">&quot;cmd/myprojectvariant/main.go&quot;</span>]</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-7" title="7"><span class="kw">FROM</span> alpine:latest</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-8" title="8"><span class="kw">COPY</span> --from=builder /project/out /project/out</a>
+<a class="sourceLine" id="myprojectvariant-dockerfile-9" title="9"><span class="kw">CMD</span> [<span class="st">&quot;/project/out&quot;</span>]</a></code></pre></div>
+<p>The program we want to run as our custom Action is <code>cmd/myprojectvariant/main.go</code>, packaged via the <code>Dockerfile</code>. All we need to do is follow <a href="https://docs.github.com/en/actions/creating-actions/creating-a-docker-container-action">GitHub's guide</a>, right? Not quite.</p>
+<h1 id="problem-our-source-is-closed">Problem: Our source is closed</h1>
+<p>For our Action to be available to the public, its definition file "<code>action.yaml</code>" must be in a public GitHub repository. However, our project is closed-source and we don't want to open source it just for the sake of making our Action. This means the following type of Docker Action isn't available:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><a class="sourceLine" id="cb3-1" title="1"><span class="fu">runs:</span></a>
+<a class="sourceLine" id="cb3-2" title="2">  <span class="fu">using:</span><span class="at"> </span><span class="st">&#39;docker&#39;</span></a>
+<a class="sourceLine" id="cb3-3" title="3">  <span class="fu">image:</span><span class="at"> </span><span class="st">&#39;Dockerfile&#39;</span></a></code></pre></div>
+<h2 id="solution-public-container-references">Solution: Public container references</h2>
+<p>Fortunately, GitHub has an answer. Docker Actions can <a href="https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#example-using-public-docker-registry-container">use a pre-built container</a>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode yaml"><code class="sourceCode yaml"><a class="sourceLine" id="cb4-1" title="1"><span class="fu">runs:</span></a>
+<a class="sourceLine" id="cb4-2" title="2">  <span class="fu">using:</span><span class="at"> </span><span class="st">&#39;docker&#39;</span></a>
+<a class="sourceLine" id="cb4-3" title="3">  <span class="fu">image:</span><span class="at"> </span><span class="st">&#39;docker://debian:stretch-slim&#39;</span></a></code></pre></div>
+<p>This means we can build a Docker image from our closed-source code and reference that image in the open-source <code>action.yaml</code>.</p>
+<p>Let's make a new public repo for our <code>action.yaml</code> and add a testing workflow.</p>
+<pre class="example"><code>custom-action-demo
+├── .github
+│   └── workflows
+│       └── test.yaml
+├── README.md
+└── action.yaml
+</code></pre>
+<div class="sourceCode" id="custom-action-definition"><pre class="sourceCode yaml"><code class="sourceCode yaml"><a class="sourceLine" id="custom-action-definition-1" title="1"><span class="co"># action.yaml</span></a>
+<a class="sourceLine" id="custom-action-definition-2" title="2"><span class="fu">name:</span><span class="at"> </span><span class="st">&#39;Run my project variant&#39;</span></a>
+<a class="sourceLine" id="custom-action-definition-3" title="3"><span class="fu">description:</span><span class="at"> </span><span class="st">&#39;Runs an external Docker container&#39;</span></a>
+<a class="sourceLine" id="custom-action-definition-4" title="4"><span class="fu">runs:</span></a>
+<a class="sourceLine" id="custom-action-definition-5" title="5">  <span class="fu">using:</span><span class="at"> </span><span class="st">&#39;docker&#39;</span></a>
+<a class="sourceLine" id="custom-action-definition-6" title="6">  <span class="fu">image:</span><span class="at"> </span><span class="st">&#39;docker://myprojectvariant:12345&#39;</span></a></code></pre></div>
+<div class="sourceCode" id="custom-action-test-workflow"><pre class="sourceCode yaml"><code class="sourceCode yaml"><a class="sourceLine" id="custom-action-test-workflow-1" title="1"><span class="co"># .github/workflows/test.yaml</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-2" title="2"><span class="fu">name:</span><span class="at"> Test</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-3" title="3"><span class="fu">on:</span><span class="at"> </span><span class="kw">[</span>workflow_dispatch<span class="kw">]</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-4" title="4"><span class="fu">jobs:</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-5" title="5">  <span class="fu">test:</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-6" title="6">    <span class="fu">runs-on:</span><span class="at"> ubuntu-latest</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-7" title="7">    <span class="fu">steps:</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-8" title="8">      <span class="kw">-</span> <span class="fu">name:</span><span class="at"> Check out the the Action repository</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-9" title="9">        <span class="fu">uses:</span><span class="at"> actions/checkout@v3</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-10" title="10"></a>
+<a class="sourceLine" id="custom-action-test-workflow-11" title="11">      <span class="kw">-</span> <span class="fu">name:</span><span class="at"> Run the current version of the custom Action</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-12" title="12">        <span class="co"># This is an interesting way to call a locally-defined</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-13" title="13">        <span class="co"># action.yaml. The path is expected to contain a file</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-14" title="14">        <span class="co"># called action.yaml or action.yml which will be run</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-15" title="15">        <span class="co"># as the Action.</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-16" title="16">        <span class="co">#</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-17" title="17">        <span class="co"># If action.yaml is in a subfolder of the respository</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-18" title="18">        <span class="co"># then this &quot;uses:&quot; statemement should be the path of</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-19" title="19">        <span class="co"># the folder containing the action.</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-20" title="20">        <span class="co">#</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-21" title="21">        <span class="co"># E.g. if the action is in ./actions/foo/action.yaml,</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-22" title="22">        <span class="co"># the statement should be &quot;uses: ./actions/foo&quot;</span></a>
+<a class="sourceLine" id="custom-action-test-workflow-23" title="23">        <span class="fu">uses:</span><span class="at"> ./</span></a></code></pre></div>
+<p>This addresses the closed-source problem. Now we can push a public image, update our <code>action.yaml</code> with that image, and have a functional Action. However, there are problems with the testing experience.</p>
+<h1 id="problem-remote-testing-is-a-bad-development-experience">Problem: Remote testing is a bad development experience</h1>
+<p>Imagine a full test cycle involving a code change in our closed-source repository:</p>
+<ol>
+<li>Update <code>mylib.go</code></li>
+<li>Build a new Docker image</li>
+<li>Push the new Docker image to a public registry</li>
+<li>Update <code>action.yaml</code> with the new image tag</li>
+<li>Push the <code>action.yaml</code> update to the public GitHub repository</li>
+<li>Trigger a test run of <code>action.yaml</code> on the public GitHub repository</li>
+</ol>
+<p>This is slow:</p>
+<ul>
+<li>Step 3 has a lot of network overhead</li>
+<li>Step 5 has a small amount of network overhead</li>
+<li>Step 6 has overhead from spinning up a GitHub Actions runner and pulling the new image over the network</li>
+</ul>
+<p>And there are other problems beyond speed:</p>
+<ul>
+<li>Steps 3, 4, and 5 publish functionality that may not be ready for public consumption</li>
+<li>Step 3 could incur cost if you are billed for registry space</li>
+<li>Step 6 could incur cost because GitHub Actions runners aren't free</li>
+</ul>
+<h2 id="solution-local-testing-with-act">Solution: Local testing with <code>act</code></h2>
+<p>There is a wonderful project called <a href="https://github.com/nektos/act">act</a> which is designed to run Actions workflows locally. Our test is a workflow, so we can use <code>act</code> to run it.</p>
+<p>In <code>custom-action-demo</code>:</p>
+<pre class="example"><code>$ act -l
+Stage  Job ID  Job name  Workflow name  Workflow file  Events
+0      test    test      Test           test.yaml      workflow_dispatch
+</code></pre>
+<p>We can run our test with <code>act -j test</code>, eliminating most problems with steps 4, 5, and 6.</p>
+<p>We can fix the rest of our problems by taking advantage of the local Docker registry, which <code>act</code> can use to "pull" the image for our custom Action. Instead of a remote image, we can set the <code>image:</code> field of <code>action.yaml</code> to an image in our local registry.</p>
+<p>Putting all of these ideas together, here's a new testing workflow:</p>
+<ol>
+<li>Update <code>mylib.go</code></li>
+<li>Build a new Docker image</li>
+<li>Update <code>action.yaml</code> with the new (local) image tag</li>
+<li>Test with <code>act -j test</code></li>
+</ol>
+<h1 id="all-together-now">All together now</h1>
+<p>Finally, we can package this flow into a single command. I'm going to wrap steps 2, 3, and 4 up using <a href="https://github.com/casey/just">just</a>; feel free to use your favorite tool instead, like <code>make</code> or a Bash script.</p>
+<pre class="example"><code>custom-action-demo
+├── .github
+│   └── workflows
+│       └── test.yaml
+├── README.md
+├── action.yaml
+└── justfile
+</code></pre>
+<div class="sourceCode" id="justfile"><pre class="sourceCode makefile"><code class="sourceCode makefile"><a class="sourceLine" id="justfile-1" title="1"><span class="co"># justfile</span></a>
+<a class="sourceLine" id="justfile-2" title="2"><span class="dt">tag </span><span class="ch">:=</span><span class="st"> `date -u +%s`</span></a>
+<a class="sourceLine" id="justfile-3" title="3"><span class="dt">image </span><span class="ch">:=</span><span class="st"> &quot;myprojectvariant:&quot; + tag</span></a>
+<a class="sourceLine" id="justfile-4" title="4"></a>
+<a class="sourceLine" id="justfile-5" title="5"><span class="dv">build:</span></a>
+<a class="sourceLine" id="justfile-6" title="6">    cd ../custom-action-demo-code &amp;&amp; <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-7" title="7">        docker build <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-8" title="8">        -f ./cmd/myprojectvariant/Dockerfile <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-9" title="9">        . <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-10" title="10">        -t <span class="st">&quot;{{image}}&quot;</span></a>
+<a class="sourceLine" id="justfile-11" title="11"></a>
+<a class="sourceLine" id="justfile-12" title="12"><span class="dv">updateaction:</span></a>
+<a class="sourceLine" id="justfile-13" title="13">    sed -i <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-14" title="14">        <span class="st">&#39;s|^  image:.*</span><span class="ch">$|</span><span class="st">  image: &quot;docker://{{image}}&quot;|&#39;</span> <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-15" title="15">        action.yaml</a>
+<a class="sourceLine" id="justfile-16" title="16"></a>
+<a class="sourceLine" id="justfile-17" title="17"><span class="dv">test:</span><span class="dt"> build updateaction</span></a>
+<a class="sourceLine" id="justfile-18" title="18">    ./bin/act -j test --pull=false</a></code></pre></div>
+<p>Now a simple <code>just test</code> will build the image, update the Action, and run our test job locally! No network overhead, no Actions runner overhead, no losing focus.</p>
+<h2 id="bonus-building-a-go-project-with-docker-is-slow">Bonus: Building a Go project with Docker is slow</h2>
+<p>If you want to save even more time in local development, the <code>go build</code> step can be done outside of Docker to take advantage of the Go toolchain's caching. The resulting binary is then copied into a Docker container. Here's the new <code>build</code> definition in <code>justfile</code> and new <code>Dockerfile</code>:</p>
+<div class="sourceCode" id="justfile-faster"><pre class="sourceCode makefile"><code class="sourceCode makefile"><a class="sourceLine" id="justfile-faster-1" title="1"><span class="co"># justfile excerpt</span></a>
+<a class="sourceLine" id="justfile-faster-2" title="2"></a>
+<a class="sourceLine" id="justfile-faster-3" title="3"><span class="co"># Build the binary for the alpine container</span></a>
+<a class="sourceLine" id="justfile-faster-4" title="4"><span class="dt">buildenv </span><span class="ch">:=</span><span class="st"> &quot;GOOS=linux GARCH=amd64 CGO_ENABLED=0&quot;</span></a>
+<a class="sourceLine" id="justfile-faster-5" title="5"></a>
+<a class="sourceLine" id="justfile-faster-6" title="6"><span class="dv">build:</span></a>
+<a class="sourceLine" id="justfile-faster-7" title="7">    cd ../custom-action-demo-code &amp;&amp; <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-8" title="8">        {{buildenv}} go build <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-9" title="9">        -o myprojectvariant <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-10" title="10">        cmd/myprojectvariant/main.go</a>
+<a class="sourceLine" id="justfile-faster-11" title="11"></a>
+<a class="sourceLine" id="justfile-faster-12" title="12">    cd ../custom-action-demo-code &amp;&amp; <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-13" title="13">        docker build <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-14" title="14">        -f ./cmd/myprojectvariant/Dockerfile <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-15" title="15">        . <span class="ch">\</span></a>
+<a class="sourceLine" id="justfile-faster-16" title="16">        -t <span class="st">&quot;{{image}}&quot;</span></a></code></pre></div>
+<div class="sourceCode" id="dockerfile-fast"><pre class="sourceCode Dockerfile"><code class="sourceCode dockerfile"><a class="sourceLine" id="dockerfile-fast-1" title="1"><span class="co"># cmd/myprojectvariant/Dockerfile</span></a>
+<a class="sourceLine" id="dockerfile-fast-2" title="2"><span class="kw">FROM</span> alpine:latest</a>
+<a class="sourceLine" id="dockerfile-fast-3" title="3"><span class="kw">COPY</span> myprojectvariant /project/myprojectvariant</a>
+<a class="sourceLine" id="dockerfile-fast-4" title="4"><span class="kw">CMD</span> [<span class="st">&quot;/project/myprojectvariant&quot;</span>]</a></code></pre></div>
+<h1 id="source-code">Source code</h1>
+<p>Source code for this blog post can be found on GitHub:</p>
+<ul>
+<li><a href="https://github.com/michaelmdresser/custom-action-demo">michaelmdresser/custom-action-demo</a></li>
+<li><a href="https://github.com/michaelmdresser/custom-action-demo-code">michaelmdresser/custom-action-demo-code</a></li>
+</ul>
+    </body>
+</html>
