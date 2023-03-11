@@ -1,15 +1,14 @@
 #+TITLE: Rapid local development of custom Docker GitHub Actions
 #+DATE: 2023-03-11
 
-The available documentation for [[https://docs.github.com/en/actions/creating-actions][custom GitHub Actions]] is lacking in the testing
-department, particularly for custom Actions using external Docker containers.
-The documentation is even harder to work with if you want to keep the source
-code of your custom Action private.
+Developing a [[https://docs.github.com/en/actions/creating-actions][custom GitHub Action]] that uses a Docker image is slow.
+Documentation for how to build an Action on top of closed-source code is hard to
+find. This post aims to fill the documentation gap and provide a solution to the
+slow development problem.
 
-This post outlines the fastest iteration loop I've been able to find for custom
-Docker-based GitHub Action development work. I'll lay out a simple Go project to
-use as a basis for a GitHub Action, explain how to build an Action for the
-project, and finally construct a fast, local toolchain for development.
+I'll lay out a simple "private" Go project to use as a basis for a custom
+Action, explain how to build a public Action for the project, and finally
+construct a fast, local toolchain for development.
 
 * The initial project
 Let's say we have a Go project in a *private repository* that looks like this:
@@ -88,27 +87,24 @@ func main() {
 # cmd/myprojectvariant/Dockerfile
 FROM golang:latest as builder
 WORKDIR /project
-COPY go.mod go.mod
-COPY pkg pkg
-COPY cmd cmd
-RUN ["go", "build",
-     "-o", "/project/out",
+COPY . .
+RUN ["go", "build", "-o", "/project/out",
      "cmd/myprojectvariant/main.go"]
 FROM alpine:latest
 COPY --from=builder /project/out /project/out
 CMD ["/project/out"]
 #+end_src
 
-The program we want to run in our custom Action is ~cmd/myprojectvariant/main.go~, packaged via the ~Dockerfile~. All we need to do is follow [[https://docs.github.com/en/actions/creating-actions/creating-a-docker-container-action][GitHub's guide]], right?
+The program we want to run as our custom Action is ~cmd/myprojectvariant/main.go~, packaged via the ~Dockerfile~. All we need to do is follow [[https://docs.github.com/en/actions/creating-actions/creating-a-docker-container-action][GitHub's guide]], right?
 Not quite.
 
-* Problem: My source is closed
+* Problem: Our source is closed
 
-For out Action to be available to the public, its definition file
+For our Action to be available to the public, its definition file
 "~action.yaml~" must be in a public GitHub repository. However, our project is
 closed-source and we don't want to open source it just for the sake of making
-our Action. This means the following type of custom Docker action isn't
-available because it would require our source code to be publicly available:
+our Action. This means the following type of Docker Action isn't
+available:
 #+begin_src yaml
 runs:
   using: 'docker'
@@ -116,7 +112,7 @@ runs:
 #+end_src
 
 ** Solution: Public container references
-Fortunately, GitHub has provided an answer. Docker Actions can [[https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#example-using-public-docker-registry-container][use a pre-built container]]:
+Fortunately, GitHub has an answer. Docker Actions can [[https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#example-using-public-docker-registry-container][use a pre-built container]]:
 #+begin_src yaml
 runs:
   using: 'docker'
@@ -177,7 +173,7 @@ jobs:
 This addresses the closed-source problem. Now we can push a public image, update
 our ~action.yaml~ with that image, and have a functional Action. However, there are problems with the testing experience.
 
-* Problem: Remote development makes for bad testing
+* Problem: Remote testing is a bad development experience
 
 Imagine a full test cycle involving a code change in our closed-source
 repository:
@@ -189,14 +185,14 @@ repository:
 6. Trigger a test run of ~action.yaml~ on the public GitHub repository
 
 This is slow:
-- Step 3 involves a lot of data flowing over the network
-- Step 5 involves a small amount of network overhead
-- Step 6 involves time overhead from spinning up a GitHub Actions runner and pulling the new image over the network
+- Step 3 has a lot of network overhead
+- Step 5 has a small amount of network overhead
+- Step 6 has overhead from spinning up a GitHub Actions runner and pulling the new image over the network
 
-There are other problems beyond speed:
+And there are other problems beyond speed:
 - Steps 3, 4, and 5 publish functionality that may not be ready for public consumption
-- Step 3 could incur cost overheads if you are billed for registry space
-- Step 6 could incur cost overheads because GitHub Actions runners aren't free
+- Step 3 could incur cost if you are billed for registry space
+- Step 6 could incur cost because GitHub Actions runners aren't free
 
 ** Solution: Local testing with ~act~
 
@@ -209,7 +205,7 @@ Stage  Job ID  Job name  Workflow name  Workflow file  Events
 0      test    test      Test           test.yaml      workflow_dispatch
 #+end_example
 
-We can run our test job with ~act -j test~. This eliminates most problems
+We can run our test with ~act -j test~, eliminating most problems
 with steps 4, 5, and 6.
 
 We can fix the rest of our problems by taking advantage of the local Docker
@@ -223,7 +219,9 @@ Putting all of these ideas together, here's a new testing workflow:
 3. Update ~action.yaml~ with the new (local) image tag
 4. Test with ~act -j test~
 
-All that's left is to package this flow into a single command. I'm going to wrap
+* All together now
+
+Finally, we can package this flow into a single command. I'm going to wrap
 steps 2, 3, and 4 up using [[https://github.com/casey/just][just]]; feel free to use your favorite tool instead,
 like ~make~ or a Bash script.
 
@@ -266,15 +264,14 @@ focus.
 ** Bonus: Building a Go project with Docker is slow
 If you want to save even more time in local development, the ~go build~ step can
 be done outside of Docker to take advantage of the Go toolchain's caching. The
-resulting binary is then copied into a Docker container.
+resulting binary is then copied into a Docker container. Here's the new
+~build~ definition in ~justfile~ and new ~Dockerfile~:
 
 #+NAME: justfile-faster
 #+begin_src makefile
-# justfile
-tag := `date -u +%s`
-image := "myprojectvariant:" + tag
+# justfile excerpt
 
-# These ensure the built binary will work in the alpine container
+# Build the binary for the alpine container
 buildenv := "GOOS=linux GARCH=amd64 CGO_ENABLED=0"
 
 build:
@@ -288,16 +285,6 @@ build:
         -f ./cmd/myprojectvariant/Dockerfile \
         . \
         -t "{{image}}"
-
-updateaction:
-    sed -i \
-        's|^  image:.*$|  image: "docker://{{image}}"|' \
-        action.yaml
-
-test: build updateaction
-    # --pull=false explanation:
-    # https://github.com/nektos/act/issues/1594#issuecomment-1413067760
-    act -j test --pull=false
 #+end_src
 
 #+NAME: dockerfile-fast
