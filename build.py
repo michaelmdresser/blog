@@ -15,16 +15,16 @@ finished_posts = [
 ]
 
 
-index_md = '''
+index_md = """
 ---
-title: "Michael Dresser's blog"
+title: "The blog of Michael Dresser"
 ---
 
-Visit my home page at [michaeldresser.io](https://michaeldresser.io).
+Visit my home page at [michaelmdresser.com](https://michaelmdresser.com).
 
 ## Posts
 
-'''
+"""
 
 # Reversed for stack-listing on the index
 for post in reversed(finished_posts):
@@ -49,25 +49,24 @@ for post in reversed(finished_posts):
     # super hacky header YAML parsing
     with open(full_post_path) as f:
         for line in f.readlines():
-            if 'title:' in line:
+            if "title:" in line:
                 title = line.replace("title:", "").strip()
                 break
 
             # for .org files
-            if '#+TITLE:' in line:
-                title = line.replace('#+TITLE:', "").strip()
+            if "#+TITLE:" in line:
+                title = line.replace("#+TITLE:", "").strip()
                 break
-
 
     with open(full_post_path) as f:
         for line in f.readlines():
-            if 'date:' in line:
+            if "date:" in line:
                 date = line.replace("date:", "").strip()
                 break
 
             # for .org files
-            if '#+DATE:' in line:
-                date = line.replace('#+DATE:', "").strip()
+            if "#+DATE:" in line:
+                date = line.replace("#+DATE:", "").strip()
                 break
 
     if title is None:
